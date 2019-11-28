@@ -1,0 +1,357 @@
+---
+title: "Proyecto final"
+author: "Nelson David Marchán Amoroso"
+date: '`r format(Sys.Date(), "%B %d, %Y")`'
+output:
+  html_document:
+    toc: true
+    toc_float:
+      collapsed: false
+      smooth_scroll: false
+    theme: flatly
+---
+
+# Desarrollo del trabajo
+
+<div style="text-align: justify">
+
+En las secciones 1 y 2 se detallarán recursos acerca de dos temas que son relevantes al momento de tratar y presentar información, como lo son las expresiones regulares y Markdown.
+
+Dentro de cada tema, se compararán dos recursos: uno para aprendizaje, que en este caso son tutoriales o videos, y otro de consulta de las diversas funcionalidades, como lo son las hojas de referencia.
+
+Finalmente, en la sección 3 se desrrolla un análisis acerca del desempleo entre géneros, con data tomada de la API del Banco Mundial.
+
+## 1. Expresiones regulares
+
+Actualmente, hay varias plataformas que ofrecen la enseñanza del lenguaje R desde cero, una de ellas es [DataCamp](https://www.datacamp.com/), que a criterio personal, me parece una buena plataforma para aprender y avanzar al ritmo que el estudiante se proponga.
+
+Dentro de los cursos ofrecidos por DataCamp existe uno particular relacionado a las expresiones regulares, el cual resulta muy claro, a la vez que los ejercicios propuestos son buenos y aumentan su complejidad conforme se avanza el capítulo. Aquí se explican los comandos *grepl*, *grep*, *sub* y *gsub*.
+
+La limitación de estas herramientas de aprendizaje es que están condicionadas a ejercicios propuestos por la plataforma, que quizá sean más sencillos que los problemas reales al momento de tratar bases de datos.
+
+Por otra parte, como un recursos de consulta se puede mencionar a la [Hoja de referencia](https://rstudio.com/wp-content/uploads/2016/09/RegExCheatsheet.pdf) de RStudio. En la misma. se tiene de manera muy resumida los principales comandos y pequeños ejemplos de los resultados finales de aplicar dichos comandos. Aquí se explica como *localizar*, *extraer*, *reemplazar* patrones, entre otras.
+
+Cabe destacar que ambos recursos son buenos de tener a mano cuando se trate de expresiones regulares, sin embargo considero que una herramienta como DataCamp está enfocada a personas que quieren aprender desde cero, mientras que la hoja de referencia está más dirigida para aquellos que ya conocen del tema y buscan algún tema en particular.
+
+## 2. Markdown
+
+Al igual que las expresiones regulares, se puede encontrar un sinnúmero de opciones en internet sobre los comandos principales y usos de R Markdown.
+
+Existen hojas de referencia que resumen las principales funcionalidades y beneficios de usar R Markdown. Por ejemplo [Hoja de referencia](https://rstudio.com/wp-content/uploads/2015/03/rmarkdown-spanish.pdf), donde se detallan comandos que van un archivo en R Markdown, formato del texto, hasta crear documentos interactivos ya a un nivel más avanzado de código.
+
+Sin duda, estas plantillas son un recurso que siempre se debe tener a la mano, y recurrir a la misma en caso de necesitar recordar o aclarar algún comando en particular, sin embargo, considero que no es lo ideal para aprender. Aunque hay que destacar que esta plantilla e smuy explícita y trata varias cosas, por lo que me parece muy completa.
+
+Hay varios tutoriales, que permiten visualizar la funcionalidad de R Markdown, por ejemplo [R Markdown from R Studio](https://rmarkdown.rstudio.com/), el cual resulta muy explícito para personas que están aprendiéndolo. Me resultó muy buena la forma en que se van presentando los conceptos paso a paso, y da la posibilidad de avanzar una vez comprendido el tema que se trató. Esto es una manera organizada para ir desde lo básico hasta lo más complejo, siguiendo un hilo, para no perderse en el camino y confundirse con tanta información que está en internet.  
+
+<div/>
+
+## 3. Desempleo por región y sexo
+
+```{r pressure, echo=FALSE, include=FALSE}
+
+library(XML)
+library(ggplot2)
+library(reshape2)
+library(gganimate)
+library(gifski)
+library(plyr)
+library(knitr)
+library(kableExtra)
+library(plotly)
+library(gridExtra)
+library(grid)
+
+banco.mundial <- "http://api.worldbank.org/v2/country?per_page=500&page=1"
+banco.mundial <- readLines(banco.mundial)
+banco.mundial <- xmlParse(banco.mundial)
+banco.mundial
+
+paises <- xpathSApply(banco.mundial,
+                      "//*/wb:country", 
+                      function(x) xmlApply(x, xmlValue))
+
+paises <- as.data.frame(paises)
+paises <- data.frame(t(paises))
+rownames(paises) <- NULL
+paises <- paises[,c(2,3,5,8,9)]
+colnames(paises) <- c('pais', 'region', 'ingresos', 'longitud', 'latitud')
+
+paises$pais <- as.character(unlist(paises$pais))
+paises$region <- as.character(unlist(paises$region))
+paises$ingresos <- as.character(unlist(paises$ingresos))
+paises$longitud <- as.numeric(paises$longitud)
+paises$latitud <- as.numeric(paises$latitud)
+paises <- paises[!is.na(paises$latitud),] 
+
+#****************************************************DATA GENERO*****************************************************************#
+
+banco.mundial <- "https://api.worldbank.org/v2/country/all/indicator/NY.GDP.PCAP.CD;SL.UEM.TOTL.FE.ZS;SL.UEM.TOTL.MA.ZS;SL.UEM.TOTL.ZS?date=2014:2018&per_page=25000&page=1&source=2"
+banco.mundial <- readLines(banco.mundial)
+banco.mundial <- xmlParse(banco.mundial)
+banco.mundial
+
+genero <- xpathSApply(banco.mundial,
+                      "//*/wb:data", 
+                      function(x) xmlApply(x, xmlValue))
+
+genero <- as.data.frame(genero)
+genero <- data.frame(t(genero))
+rownames(genero) <- NULL
+colnames(genero) <- c('indicador', 'pais', 'pcode', 'anio', 'valor')
+genero <- genero[,1:5]
+
+genero$indicador <- as.character(unlist(genero$indicador))
+genero$pais <- as.character(unlist(genero$pais))
+genero$pcode <- as.character(unlist(genero$pcode))
+genero$anio <- as.integer(genero$anio)
+genero$valor <- as.numeric(genero$valor)
+
+#********************************************************UNION BASES************************************************************#
+
+data <- merge(x=genero,y=paises, by.x = 'pais', by.y = 'pais')
+dim(data)
+
+filtro <- grep("Africa", data$region)
+data[filtro,'region'] <- 'Africa'
+
+filtro <- grep("America", data$region)
+data[filtro,'region'] <- 'America'
+
+
+```
+
+
+<div style="text-align: justify">
+Durante los últimos años se han abierto muchos debates en cuanto a la diferencia que existen entre géneros en distintos ámbitos, sean laborales, educativos, calidad de vida, etc. En este caso, se realiza un análisis exploratorio del indicador de desempleo.
+
+### 3.1. Data
+
+La data fue capturada a partir de la API del Banco Mundial. Explícitamente, se recogió la información de tasa de desempleo de hombres, mujeres y total, durante los últimos 5 años, periodo 2014-2018, para todos los países de los que se tenía información.
+
+Los indicadores utilizados fueron:
+
+*Desempleo, mujeres (% de la población activa femenina) 
+
+*Desempleo, varones (% de la población activa masculina) 
+
+*Desempleo, total (% de la población activa masculina) 
+
+*PIB per cápita
+
+### 3.2. Desempleo en el 2018
+
+El PIB per cápita es un indicador económico suficiente para poder medir la estabilidad y la calidad de vida de un país.
+
+En el gráfco siguiente, se observa la relación entre el PIB per cápita y desempleo total. En el mismo, se esperaría una relación inversa, es decir, que a mayor PIB per cápita la tasa de desempleo debería ser menor, sin embargo no se observa una relación clara entre ambas variables. 
+
+Como ejemplo, se expone a la región de Europa y Asia Central, que tienen un PIB per cápita elevado y una tasa de desempleo menor a 10% en su mayoría, sin embargo, países como España y Grecia resaltan con una tasa de desempleo de 15% y 19% respectivamente.
+
+
+```{r relacion, echo=FALSE, warning=FALSE, message = FALSE, fig.width =8.5}
+
+#*********************************************************************************************************************************
+#*************************************************  Desempleo Y PIB **************************************************************
+#*********************************************************************************************************************************
+
+unemploy <- data[(data$indicador=='GDP per capita (current US$)' | 
+                    data$indicador=='Unemployment, total (% of total labor force) (modeled ILO estimate)') & data$anio==2018,]
+
+unemploy <- dcast(unemploy, pais + region ~ indicador, value.var='valor')
+colnames(unemploy) <- c("Country", "Region", "GDP", "Unemployment")
+
+p <-ggplot(unemploy, 
+       aes(x = GDP, y=Unemployment, colour=Region, text = paste("Country:",Country))) +
+  geom_point(size=3) +
+  labs(title= "Relación PIB per cápita y % desempleo", x= 'GDP per capita', y = "% Unemployment") + 
+  theme_light() +
+  scale_x_log10() +
+  scale_color_brewer(palette="Pastel1") +
+  theme(legend.position="right", 
+        plot.title = element_text(color="black", size=10, face='bold', hjust=0.5),
+        legend.title = element_text(size=10, face='bold'),
+        legend.text = element_text(size=10))
+ggplotly(p)
+
+```
+
+
+En primera instancia, se analiza la tasa de desempleo promedio para las regiones en el año 2018. Cabe recalcar que a pesar que obtener la media por región a partir de datos de países no es la mejor medida, es una buena aproximación para conocer la situación de indicador a nivel región.
+
+Según la tabla descrita, para todas las regiones, la tasa desempleo es mayor en las mujeres, con relación a los hombres.  Aquí, resalta África que presenta, en promedio, la mayor tasa de desempleo de las mujeres. Por otra parte, la región de Europa y Asia Central tiene la tasa de desempleo más alta para los hombres.
+
+<div/>
+
+
+```{r tabla, echo=FALSE, warning=FALSE, message = FALSE, fig.width =8.5}
+
+#*********************************************************************************************************************************
+#***********************************************  Desempleo por region y sexo ****************************************************
+#*********************************************************************************************************************************
+
+unemploy <- data[(data$indicador=='Unemployment, female (% of female labor force) (modeled ILO estimate)' | 
+                    data$indicador=='Unemployment, male (% of male labor force) (modeled ILO estimate)') & data$anio==2018,]
+
+unemploy$Sexo <- ''
+filtro <- grep("female", unemploy$indicador)
+unemploy[filtro,'Sexo'] <- 'Female'
+unemploy[-filtro,'Sexo'] <- 'Male'
+
+#Tabla de Media de Desempleo 
+
+res <- dcast(unemploy, Sexo ~ region, fun.aggregate = mean, value.var='valor', na.rm=TRUE)
+kable(res, digits = 1, align = 'c', full_width = T) %>%
+  kable_styling(bootstrap_options = "striped") %>%
+  row_spec(0, background ='#ccebc5', color="black")
+
+```
+
+<div style="text-align: justify">
+A través del diagrama de cajas se puede conocer la distribución de los datos a nivel de país, región y sexo. 
+
+Dentro de cada región existen países que poseen tasas de desempleo que son datos aberrantes, por ejemplo, Dentro de América y el género masculino, el 75% de los datos están por debajo del 13.3% que representa Puerto Rico, sin embargo,  países como St. Vincent and the Grenadines y St. Lucia tienen tasas de desempleo que están fuera de la regularidad de los datos.
+
+Además, se resalta que las regiones del Este de Asia, Sur de Asia y Pacífico, tienen la menor tasa de desempleo para ambos sexos. 
+<div/>
+
+```{r boxplot, echo=FALSE, warning=FALSE, message = FALSE, fig.width =8.5}
+
+# Boxplot de desempleo por region y genero
+
+colnames(unemploy) <- c("Country", "Indicator", "Pcode", "Year", "Unemployment", "Region", "Income", "Long", "Lat", "Gender")
+
+p <- ggplot(
+  unemploy, 
+  aes(x = Gender, y=Unemployment, fill=Gender)
+) +
+  geom_boxplot() +
+  geom_point(aes(group=Country), size=0.6) +
+  labs(title="Distribución de % desempleo por región y sexo", y = "% Unemployment") + 
+  scale_fill_manual(values = c("#fbb4ae", "#b3cde3")) +
+  theme_light() +
+  theme(legend.position="none", 
+        plot.title = element_text(color="black", size=10, face='bold', hjust=0.5),
+        axis.text.x = element_blank(),
+        axis.ticks = element_blank()) +
+  facet_wrap(~ Region, ncol=6)
+
+p <- ggplotly(p)
+p
+
+```
+
+<div style="text-align: justify">
+
+En la tabla que se muestra a continuación se desprenden los 5 países con mayor diferencia entre:
+
+*Tasa de desempleo de mujeres - tasa de desempleo de hombres
+
+*Tasa de desempleo de hombres - tasa de desempleo de mujeres
+
+Es notable que en los países de África es donde existe una mayor brecha en el desempleo de las mujeres, que es ampliamente mayor al de los hombres. 
+
+Por otra parte, existen países en que los hombres tienen una mayor tasa de desempleo que las mujeres, sin embargo, esta diferencia no es tan amplia como el ejercicio anterior.
+
+<div/>
+
+```{r diferencia, echo=FALSE, warning=FALSE, message = FALSE, fig.width =8.5}
+
+#Tabla de Diferencia de Desempleo 
+
+res <- dcast(unemploy, Country + Region ~ Gender, value.var='Unemployment')
+res$diferencia <- res$Female-res$Male
+res <- res[order(-res$diferencia),]
+res <- res[!is.na(res$diferencia),]
+res <- head(res,5)
+
+res1 <- dcast(unemploy,  Country + Region ~ Gender, value.var='Unemployment')
+res1$diferencia <- res1$Male-res1$Female 
+res1 <- res1[order(-res1$diferencia),]
+res1 <- res1[!is.na(res1$diferencia),]
+res1 <- head(res1,5)
+
+res <- rbind(res,res1)
+rownames(res) <- NULL
+
+kable(res, col.names = c("País", "Región", "Desempleo Hombres", "Desempleo Mujeres", "Diferencia Desempleo"), digits = 1, align = 'c', full_width = F) %>%
+  kable_styling(bootstrap_options = c("striped")) %>%
+  row_spec(0, background = "#ccebc5", color = "black") %>%
+  column_spec(5, bold = T) %>%
+  pack_rows("Mayor diferencia: Tasa de desempleo de mujeres - tasa de desempleo de hombres", 1, 5, label_row_css = "background-color: lightgrey; color: white") %>%
+  pack_rows("Mayor diferencia: Tasa de desempleo de hombres - tasa de desempleo de mujeres", 6, 10, label_row_css = "background-color: lightgrey; color: white")
+
+```
+
+
+### 3.3. Serie de desempleo
+
+<div style="text-align: justify">
+
+Se estableció una serie de tiempo para poder visualizar la evolución del desempleo por región. Para este fin, se procedió a promediar la tasa de desempleo por país a nivel de región y año.
+
+Se observa que África se ha mantenido como la región con la tasa de desempleo feminino más alta. Por otro lado, la única región que muestra una clara tendencia de caída de la tasa de desempleo para ambos sexos es la de Europa y Asia Central, mientras que las demás regiones se mantienen relativamente en los mismos niveles en los que iniciaron.
+
+<div/>
+
+```{r serie, echo=FALSE, warning=FALSE, message = FALSE, fig.width =8.5}
+
+#*********************************************************************************************************************************
+#************************************************ Serie Desempleo por region y sexo **********************************************
+#*********************************************************************************************************************************
+
+unemploy <- data[(data$indicador=='Unemployment, female (% of female labor force) (modeled ILO estimate)' | 
+                    data$indicador=='Unemployment, male (% of male labor force) (modeled ILO estimate)'),]
+
+unemploy$Sexo <- ''
+filtro <- grep("female", unemploy$indicador)
+unemploy[filtro,'Sexo'] <- 'Female'
+unemploy[-filtro,'Sexo'] <- 'Male'
+
+unemploy <- ddply(unemploy, .(anio, region, Sexo), summarize, media = mean(valor, na.rm=TRUE))
+colnames(unemploy) <- c("Year", "Region", "Gender", "Unemployment")
+
+p <- ggplot(unemploy, aes(x=Year, y=Unemployment, color=Gender)) + 
+  geom_line(size=1) + geom_point(size=2) +
+  scale_color_manual(values = c("#fbb4ae", "#b3cde3")) +
+  labs(title = "Serie de % desempleo por región, año y sexo", y="Desempleo %", x="Años 2014-2018") + 
+  theme_light() + 
+  theme(legend.position="none", 
+        plot.title = element_text(color="black", size=10, face='bold', hjust=0.5),
+        axis.text.x = element_blank(),
+        axis.ticks = element_blank()) +
+  facet_wrap(~ Region, ncol=5) +
+  theme(strip.background = element_rect(
+     color="lightgrey", fill="lightgrey"))
+ggplotly(p)
+```
+
+## 4. Anexo
+
+```{r anexo, echo=FALSE, warning=FALSE, message = FALSE, fig.width =8.5}
+
+#*********************************************************************************************************************************
+#********************************************* Anexo Serie Desempleo por region y sexo *******************************************
+#*********************************************************************************************************************************
+
+unemploy <- data[(data$indicador=='GDP per capita (current US$)' | 
+                    data$indicador=='Unemployment, total (% of total labor force) (modeled ILO estimate)'),]
+
+unemploy <- dcast(unemploy, pais + anio + region + ingresos ~ indicador, value.var = "valor")  
+colnames(unemploy) <- c('Country', 'Year', 'Region', 'Income', 'GDP', 'Unemployment')
+
+p <- ggplot(
+  unemploy, 
+  aes(x = GDP, y=Unemployment, colour = Region)
+) +
+  geom_point(show.legend = TRUE, size=3) +
+  scale_color_brewer(palette="Pastel1") +
+  scale_x_log10() +
+  labs(x = "GDP per capita", y = "% Unemployment") + 
+  theme_light() + 
+  transition_time(Year) +
+  labs(title = "Evolución del desempleo por año y región: {frame_time}") +
+  theme(legend.position="right", 
+        plot.title = element_text(color="black", size=14, face='bold', hjust=0.5),
+        legend.title = element_text(size=10, face='bold'),
+        legend.text = element_text(size=10)) 
+p
+```
