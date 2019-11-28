@@ -15,6 +15,7 @@ Para que el código utilizado para el análisis pueda funcionar correctamente se
 * install.packages("gifski")
 * install.packages("plyr")
 * install.packages("knitr")
+* install.packages("kableExtra")
 * install.packages("plotly")
 * install.packages("gridExtra")
 * install.packages("grid")
