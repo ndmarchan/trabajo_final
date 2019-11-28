@@ -20,7 +20,7 @@ Para que el código utilizado para el análisis pueda funcionar correctamente se
 * install.packages("gridExtra")
 * install.packages("grid")
 
-### Librerias necesarias
+### Librerías necesarias
 
 * library(XML)
 * library(ggplot2)
